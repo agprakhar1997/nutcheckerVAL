@@ -1,4 +1,6 @@
 {
+  "name": "nut-detector",
+  "version": "1.0.0",
   "dependencies": {
     "cloudinary": "^1.37.2"
   }
