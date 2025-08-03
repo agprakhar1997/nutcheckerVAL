@@ -392,6 +392,9 @@
             <div class="input-group">
                 <label for="imageUrl">Image URL:</label>
                 <input type="text" id="imageUrl" placeholder="https://example.com/image.jpg">
+                <button type="button" onclick="loadTestImage()" style="margin-top: 10px; padding: 8px 16px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                    🧪 Load Test Image
+                </button>
             </div>
             
             <div class="input-group">
@@ -625,13 +628,24 @@
 
         function getDetectionCount(data) {
             let count = 0;
+            console.log('Counting detections in data:', data);
+            
             if (data.outputs) {
                 Object.values(data.outputs).forEach(output => {
+                    console.log('Processing output:', output);
                     if (output.predictions && Array.isArray(output.predictions)) {
                         count += output.predictions.length;
+                    } else if (output.image && output.image.predictions && Array.isArray(output.image.predictions)) {
+                        // Alternative format
+                        count += output.image.predictions.length;
                     }
                 });
+            } else if (data.predictions && Array.isArray(data.predictions)) {
+                // Direct predictions format
+                count = data.predictions.length;
             }
+            
+            console.log('Total detection count:', count);
             return count;
         }
 
@@ -675,28 +689,63 @@
             const resultsDiv = document.getElementById('results');
             const resultsContent = document.getElementById('resultsContent');
             
+            console.log('Displaying results for data:', data);
+            
             resultsContent.innerHTML = '';
+            
+            let hasResults = false;
             
             if (data.outputs) {
                 Object.entries(data.outputs).forEach(([key, output]) => {
-                    if (output.predictions && output.predictions.length > 0) {
-                        output.predictions.forEach((pred, index) => {
+                    console.log(`Processing output ${key}:`, output);
+                    
+                    let predictions = [];
+                    if (output.predictions && Array.isArray(output.predictions)) {
+                        predictions = output.predictions;
+                    } else if (output.image && output.image.predictions && Array.isArray(output.image.predictions)) {
+                        predictions = output.image.predictions;
+                    }
+                    
+                    if (predictions.length > 0) {
+                        hasResults = true;
+                        predictions.forEach((pred, index) => {
                             const item = document.createElement('div');
                             item.className = 'detection-item';
                             item.innerHTML = `
-                                <strong>${pred.class}</strong> - 
-                                Confidence: ${(pred.confidence * 100).toFixed(1)}% - 
-                                Position: (${pred.x.toFixed(0)}, ${pred.y.toFixed(0)})
+                                <strong>${pred.class || pred.label || 'Object'}</strong> - 
+                                Confidence: ${((pred.confidence || pred.score || 0) * 100).toFixed(1)}% - 
+                                Position: (${(pred.x || 0).toFixed(0)}, ${(pred.y || 0).toFixed(0)})
                             `;
                             resultsContent.appendChild(item);
                         });
                     }
                 });
+            } else if (data.predictions && Array.isArray(data.predictions)) {
+                // Direct predictions format
+                hasResults = data.predictions.length > 0;
+                data.predictions.forEach((pred, index) => {
+                    const item = document.createElement('div');
+                    item.className = 'detection-item';
+                    item.innerHTML = `
+                        <strong>${pred.class || pred.label || 'Object'}</strong> - 
+                        Confidence: ${((pred.confidence || pred.score || 0) * 100).toFixed(1)}% - 
+                        Position: (${(pred.x || 0).toFixed(0)}, ${(pred.y || 0).toFixed(0)})
+                    `;
+                    resultsContent.appendChild(item);
+                });
             }
             
-            if (resultsContent.children.length === 0) {
-                resultsContent.innerHTML = '<div class="detection-item">No objects detected in this frame.</div>';
+            if (!hasResults) {
+                resultsContent.innerHTML = '<div class="detection-item">No objects detected in this image. Try adjusting the confidence threshold or using a different image.</div>';
             }
+            
+            // Also show raw API response for debugging
+            const debugInfo = document.createElement('details');
+            debugInfo.innerHTML = `
+                <summary style="cursor: pointer; margin-top: 15px; font-weight: bold;">🔍 Debug Info (Raw API Response)</summary>
+                <pre style="background: #2d3748; color: #e2e8f0; padding: 15px; border-radius: 5px; margin-top: 10px; overflow-x: auto; font-size: 12px;">${JSON.stringify(data, null, 2)}</pre>
+            `;
+            resultsContent.appendChild(debugInfo);
             
             resultsDiv.classList.remove('hidden');
         }
@@ -750,16 +799,17 @@
                 const imageFile = document.getElementById('imageFile').files[0];
 
                 if (imageFile) {
-                    console.log('Processing uploaded file:', imageFile.name);
+                    console.log('Processing uploaded file:', imageFile.name, 'Size:', (imageFile.size / 1024 / 1024).toFixed(2) + 'MB');
                     
-                    // Convert to base64 using FileReader
+                    // Method 1: Try workflow format with base64
                     const reader = new FileReader();
                     reader.onload = async function(e) {
                         try {
                             const base64Data = e.target.result.split(',')[1];
                             console.log('Image converted to base64, length:', base64Data.length);
                             
-                            const requestBody = {
+                            // Try workflow format first
+                            let requestBody = {
                                 api_key: API_KEY,
                                 inputs: {
                                     image: {
@@ -769,9 +819,36 @@
                                 }
                             };
 
-                            await sendDetectionRequest(requestBody);
+                            console.log('Trying workflow format...');
+                            let success = await tryDetectionRequest(requestBody, 'workflow');
+                            
+                            if (!success) {
+                                console.log('Workflow format failed, trying direct base64...');
+                                // Try direct base64 format
+                                success = await tryDetectionRequest(base64Data, 'direct');
+                            }
+                            
+                            if (!success) {
+                                console.log('Base64 failed, trying URL approach...');
+                                // Convert to blob URL and try URL format
+                                const blob = new Blob([imageFile], { type: imageFile.type });
+                                const blobUrl = URL.createObjectURL(blob);
+                                
+                                requestBody = {
+                                    api_key: API_KEY,
+                                    inputs: {
+                                        image: {
+                                            type: "url",
+                                            value: blobUrl
+                                        }
+                                    }
+                                };
+                                
+                                await tryDetectionRequest(requestBody, 'blob-url');
+                            }
+                            
                         } catch (error) {
-                            console.error('Base64 processing error:', error);
+                            console.error('Processing error:', error);
                             showStatus(`Error processing image: ${error.message}`, 'error');
                         }
                     };
@@ -793,7 +870,7 @@
                         }
                     };
 
-                    await sendDetectionRequest(requestBody);
+                    await tryDetectionRequest(requestBody, 'url');
                 } else {
                     showStatus('Please provide an image URL or upload an image file.', 'error');
                 }
@@ -801,6 +878,48 @@
             } catch (error) {
                 console.error('Processing error:', error);
                 showStatus(`Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function tryDetectionRequest(requestBody, method) {
+            try {
+                console.log(`Trying ${method} method...`);
+                console.log('Request body:', typeof requestBody === 'string' ? 'Base64 string' : requestBody);
+                
+                const response = await fetch(API_ENDPOINT, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': method === 'direct' ? 'application/x-www-form-urlencoded' : 'application/json',
+                    },
+                    body: method === 'direct' ? requestBody : JSON.stringify(requestBody)
+                });
+
+                console.log(`${method} response status:`, response.status);
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error(`${method} error response:`, errorText);
+                    
+                    if (response.status === 400 || response.status === 422) {
+                        return false; // Try next method
+                    }
+                    throw new Error(`API Error: ${response.status} - ${errorText}`);
+                }
+
+                const data = await response.json();
+                console.log(`${method} success! Response:`, data);
+                
+                displayResults(data);
+                showStatus(`Analysis complete using ${method} - Found ${getDetectionCount(data)} objects`, 'success');
+                return true;
+                
+            } catch (error) {
+                console.error(`${method} method failed:`, error);
+                if (error.message.includes('API Error')) {
+                    showStatus(`Detection failed: ${error.message}`, 'error');
+                    return true; // Don't try other methods for API errors
+                }
+                return false; // Try next method for network/format errors
             }
         }
 
@@ -838,6 +957,14 @@
             }
         }
 
+        // Test function
+        function loadTestImage() {
+            const testImageUrl = 'https://images.unsplash.com/photo-1584464491033-06628f3a6b7b?w=800';
+            document.getElementById('imageUrl').value = testImageUrl;
+            showImagePreview(testImageUrl);
+            document.getElementById('imageFile').value = '';
+        }
+
         // Initialize page
         document.addEventListener('DOMContentLoaded', function() {
             // Check camera support
@@ -845,6 +972,11 @@
                 showStatus('Camera not supported on this device', 'error');
                 document.getElementById('startBtn').disabled = true;
             }
+            
+            // Add detailed debugging
+            console.log('App initialized');
+            console.log('API Endpoint:', API_ENDPOINT);
+            console.log('API Key length:', API_KEY.length);
         });
     </script>
 </body>
