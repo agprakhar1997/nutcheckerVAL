@@ -575,15 +575,24 @@
 }
 
 
-        function showPassFailStatus(status) {
-            const statusDiv = document.getElementById('status');
-            const icon = status === 'PASS' ? '✅' : '❌';
-            const statusClass = status === 'PASS' ? 'pass' : 'fail';
-            
-            statusDiv.innerHTML = `<span class="status-icon">${icon}</span> ${status}`;
-            statusDiv.className = `status ${statusClass}`;
-            statusDiv.classList.remove('hidden');
-        }
+function showPassFailStatus(status) {
+    const statusDiv = document.getElementById('status');
+    const icon = status === 'PASS' ? '✅' : '❌';
+    const statusClass = status === 'PASS' ? 'pass' : 'fail';
+
+    // Update UI
+    statusDiv.innerHTML = `<span class="status-icon">${icon}</span> ${status}`;
+    statusDiv.className = `status ${statusClass}`;
+    statusDiv.classList.remove('hidden');
+
+    // Stop detection and freeze current image
+    stopCamera();
+
+    // Optional: Enable restart button (if added in UI)
+    const restartBtn = document.getElementById('restartBtn');
+    if (restartBtn) restartBtn.disabled = false;
+}
+
 
         function drawBoundingBox(prediction, overlay, scaleX, scaleY) {
             const minConfidence = parseFloat(document.getElementById('confidenceSlider').value);
