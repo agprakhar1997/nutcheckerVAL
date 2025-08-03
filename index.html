@@ -675,15 +675,11 @@ function displayResults(data) {
     resultsContent.innerHTML = '';
     let hasResults = false;
 
-    // Check if predictions exist and are in the new nested format
-    const predictions = data.predictions?.predictions || [];
-    if (predictions.length > 0) {
-        hasResults = true;
+    // Handle predictions in the data structure
+    if (data.predictions && data.predictions.predictions && Array.isArray(data.predictions.predictions)) {
         let totalConfidence = 0;
 
-        predictions.forEach((pred, index) => {
-            totalConfidence += pred.confidence || 0;
-
+        data.predictions.predictions.forEach((pred, index) => {
             const item = document.createElement('div');
             item.className = 'detection-item';
 
@@ -697,24 +693,31 @@ function displayResults(data) {
             `;
 
             item.innerHTML = `
-                <strong>${pred.class || pred.label || 'Object'}</strong> - 
-                Confidence: ${(pred.confidence * 100).toFixed(1)}%
+                <strong>${pred.class || 'Object'}</strong> - 
+                Confidence: ${((pred.confidence || 0) * 100).toFixed(1)}%
                 ${boundingBoxInfo}
             `;
             resultsContent.appendChild(item);
+
+            // Sum up the confidence values
+            totalConfidence += pred.confidence;
         });
 
-        // Show average confidence
-        const avgConf = totalConfidence / predictions.length;
-        const confItem = document.createElement('div');
-        confItem.className = 'detection-item';
-        confItem.innerHTML = `
-            <strong>Average Confidence:</strong> ${(avgConf * 100).toFixed(1)}%
-        `;
-        resultsContent.appendChild(confItem);
+        hasResults = data.predictions.predictions.length > 0;
+
+        // Calculate and display average confidence if available
+        if (hasResults) {
+            const avgConfidence = (totalConfidence / data.predictions.predictions.length) * 100;
+            const avgConfidenceItem = document.createElement('div');
+            avgConfidenceItem.className = 'detection-item';
+            avgConfidenceItem.innerHTML = `
+                <strong>Avg Confidence:</strong> ${avgConfidence.toFixed(1)}%
+            `;
+            resultsContent.appendChild(avgConfidenceItem);
+        }
     }
 
-    // Show status_output (PASS/FAIL) if present
+    // Show status_output or result (PASS/FAIL)
     if (data.status_output) {
         const statusItem = document.createElement('div');
         statusItem.className = 'detection-item';
@@ -722,14 +725,14 @@ function displayResults(data) {
             <strong>Workflow Status:</strong> ${data.status_output}
         `;
         resultsContent.appendChild(statusItem);
-        hasResults = true;
     }
 
+    // If no predictions, show message
     if (!hasResults) {
         resultsContent.innerHTML = '<div class="detection-item">No objects detected in this image. Try adjusting the confidence threshold.</div>';
     }
 
-    // Debug info
+    // Debug info for developers
     const debugInfo = document.createElement('details');
     debugInfo.innerHTML = `
         <summary style="cursor: pointer; margin-top: 15px; font-weight: bold;">🔍 Debug Info (Raw API Response)</summary>
