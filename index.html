@@ -392,9 +392,14 @@
             <div class="input-group">
                 <label for="imageUrl">Image URL:</label>
                 <input type="text" id="imageUrl" placeholder="https://example.com/image.jpg">
-                <button type="button" onclick="loadTestImage()" style="margin-top: 10px; padding: 8px 16px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">
-                    🧪 Load Test Image
-                </button>
+                <div style="margin-top: 10px; display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button type="button" onclick="loadTestImage()" style="padding: 8px 16px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                        🧪 Load Nuts Test
+                    </button>
+                    <button type="button" onclick="testAPIConnection()" style="padding: 8px 16px; background: #17a2b8; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                        🔗 Test API Connection
+                    </button>
+                </div>
             </div>
             
             <div class="input-group">
@@ -883,8 +888,30 @@
 
         async function tryDetectionRequest(requestBody, method) {
             try {
-                console.log(`Trying ${method} method...`);
-                console.log('Request body:', typeof requestBody === 'string' ? 'Base64 string' : requestBody);
+                console.log(`\n=== TRYING ${method.toUpperCase()} METHOD ===`);
+                
+                // For your specific workflow, let's test the exact curl format first
+                if (method === 'workflow') {
+                    const curlTest = await testOriginalCurlFormat(
+                        typeof requestBody === 'string' ? requestBody : 
+                        (requestBody.inputs?.image?.value || requestBody.inputs?.image)
+                    );
+                    
+                    if (curlTest.success) {
+                        displayResults(curlTest.data);
+                        showStatus(`Analysis complete using ${method} - Found ${getDetectionCount(curlTest.data)} objects`, 'success');
+                        return true;
+                    } else {
+                        console.error('Curl format test failed:', curlTest.error);
+                        showStatus(`${method} failed: ${curlTest.error}`, 'error');
+                        return false;
+                    }
+                }
+
+                // Fallback to other methods
+                console.log('Request body type:', typeof requestBody);
+                console.log('Request body sample:', typeof requestBody === 'string' ? 
+                    requestBody.substring(0, 100) + '...' : requestBody);
                 
                 const response = await fetch(API_ENDPOINT, {
                     method: 'POST',
@@ -895,12 +922,14 @@
                 });
 
                 console.log(`${method} response status:`, response.status);
+                console.log(`${method} response headers:`, Object.fromEntries(response.headers.entries()));
 
                 if (!response.ok) {
                     const errorText = await response.text();
                     console.error(`${method} error response:`, errorText);
                     
                     if (response.status === 400 || response.status === 422) {
+                        showStatus(`${method} format not supported, trying next method...`, 'processing');
                         return false; // Try next method
                     }
                     throw new Error(`API Error: ${response.status} - ${errorText}`);
@@ -919,6 +948,7 @@
                     showStatus(`Detection failed: ${error.message}`, 'error');
                     return true; // Don't try other methods for API errors
                 }
+                showStatus(`${method} method failed, trying alternatives...`, 'processing');
                 return false; // Try next method for network/format errors
             }
         }
@@ -957,12 +987,86 @@
             }
         }
 
-        // Test function
+        // Test function with your specific image
         function loadTestImage() {
-            const testImageUrl = 'https://images.unsplash.com/photo-1584464491033-06628f3a6b7b?w=800';
+            // Using a nuts/hardware image that should trigger your model
+            const testImageUrl = 'https://images.unsplash.com/photo-1581833971358-2c8b550f87b3?w=800'; // nuts and bolts
             document.getElementById('imageUrl').value = testImageUrl;
             showImagePreview(testImageUrl);
             document.getElementById('imageFile').value = '';
+        }
+
+        // Add a test with your exact curl format
+        async function testOriginalCurlFormat(imageData, isBase64 = false) {
+            try {
+                console.log('Testing original curl format...');
+                
+                const requestBody = {
+                    api_key: API_KEY,
+                    inputs: {
+                        image: isBase64 ? 
+                            { type: "base64", value: imageData } : 
+                            { type: "url", value: imageData }
+                    }
+                };
+
+                console.log('Request payload:', JSON.stringify(requestBody, null, 2));
+
+                const response = await fetch(API_ENDPOINT, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+
+                console.log('Response status:', response.status);
+                console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+
+                const responseText = await response.text();
+                console.log('Raw response:', responseText);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${responseText}`);
+                }
+
+                let data;
+                try {
+                    data = JSON.parse(responseText);
+                } catch (e) {
+                    throw new Error(`Invalid JSON response: ${responseText}`);
+                }
+
+                console.log('Parsed response data:', data);
+                return { success: true, data };
+
+            } catch (error) {
+                console.error('Original curl format test failed:', error);
+                return { success: false, error: error.message };
+            }
+        }
+
+        // Test API connection with a simple request
+        async function testAPIConnection() {
+            showStatus('Testing API connection...', 'processing');
+            
+            try {
+                // Test with a simple online image first
+                const testUrl = 'https://images.unsplash.com/photo-1581833971358-2c8b550f87b3?w=400';
+                
+                const curlTest = await testOriginalCurlFormat(testUrl, false);
+                
+                if (curlTest.success) {
+                    showStatus('✅ API connection successful!', 'success');
+                    displayResults(curlTest.data);
+                } else {
+                    showStatus(`❌ API connection failed: ${curlTest.error}`, 'error');
+                }
+                
+            } catch (error) {
+                showStatus(`❌ Connection test failed: ${error.message}`, 'error');
+                console.error('API connection test error:', error);
+            }
         }
 
         // Initialize page
@@ -974,9 +1078,17 @@
             }
             
             // Add detailed debugging
-            console.log('App initialized');
+            console.log('=== APP INITIALIZATION ===');
             console.log('API Endpoint:', API_ENDPOINT);
-            console.log('API Key length:', API_KEY.length);
+            console.log('API Key:', API_KEY ? `${API_KEY.substring(0, 8)}...` : 'NOT SET');
+            console.log('Workflow appears to be: nut-detection-cn8ep/conditional-branching-2');
+            console.log('This suggests conditional logic - results may be filtered based on detection conditions');
+            
+            // Test API immediately on load
+            setTimeout(() => {
+                console.log('Running automatic API test...');
+                testAPIConnection();
+            }, 1000);
         });
     </script>
 </body>
