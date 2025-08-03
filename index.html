@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Nut Detection with Roboflow</title>
+</head>
+<body>
+  <h1>Nut Detection</h1>
+  <video id="video" width="640" height="480" autoplay></video>
+  <br />
+  <button id="capture">Capture & Analyze</button>
+  <canvas id="canvas" width="640" height="480" style="display:none;"></canvas>
+  <p id="status"></p>
+  <pre id="result"></pre>
+
+  <script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const statusText = document.getElementById('status');
+    const resultText = document.getElementById('result');
+
+    // Ask for camera access
+    navigator.mediaDevices.getUserMedia({ video: true })
+      .then(stream => video.srcObject = stream)
+      .catch(err => {
+        statusText.textContent = 'Error accessing camera: ' + err.message;
+      });
+
+    document.getElementById('capture').addEventListener('click', async () => {
+      statusText.textContent = 'Capturing image...';
+
+      // Draw video frame to canvas
+      const context = canvas.getContext('2d');
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      // Convert canvas to base64 data URL
+      const dataUrl = canvas.toDataURL('image/jpeg');
+
+      // Upload to Imgur (anonymous demo upload)
+      statusText.textContent = 'Uploading image...';
+      const imgurRes = await fetch("https://api.imgur.com/3/image", {
+        method: "POST",
+        headers: {
+          Authorization: "Client-ID 546ff987b6e14e0", // You should replace with your own Imgur Client-ID for production
+          Accept: "application/json",
+        },
+        body: new URLSearchParams({
+          image: dataUrl.split(',')[1],
+          type: 'base64'
+        })
+      });
+      const imgurData = await imgurRes.json();
+      const imageUrl = imgurData.data.link;
+
+      statusText.textContent = 'Analyzing image...';
+
+      // Send image URL to Roboflow
+      const roboflowRes = await fetch('https://serverless.roboflow.com/infer/workflows/nut-detection-cn8ep/conditional-branching-2', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          api_key: 'W3JaMDUJgegvylcX7n4Y',
+          inputs: {
+            image: { type: 'url', value: imageUrl }
+          }
+        })
+      });
+
+      const roboflowResult = await roboflowRes.json();
+      statusText.textContent = 'Analysis complete.';
+      resultText.textContent = JSON.stringify(roboflowResult, null, 2);
+    });
+  </script>
+</body>
+</html>
