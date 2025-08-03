@@ -283,6 +283,13 @@
         .hidden {
             display: none !important;
         }
+
+        .status-output {
+            text-align: center;
+            margin-top: 10px;
+            font-weight: bold;
+            font-size: 18px;
+        }
     </style>
 </head>
 <body>
@@ -314,6 +321,7 @@
                 <video id="videoElement" autoplay muted playsinline></video>
                 <div class="overlay" id="overlay"></div>
             </div>
+            <div id="statusOutput" class="status-output hidden"></div>
 
             <div id="status" class="status hidden"></div>
 
@@ -503,6 +511,15 @@
                     }
                 });
             }
+
+            // Stop detection if status is PASS or FAIL
+            if (workflowStatus === 'pass' || workflowStatus === 'fail') {
+                if (detectionInterval) {
+                    clearInterval(detectionInterval);
+                    detectionInterval = null;
+                }
+                document.getElementById('captureBtn').disabled = true;
+            }
         }
 
         function checkWorkflowStatus(data) {
@@ -518,9 +535,11 @@
                         const status = output.status.toLowerCase();
                         if (status.includes('pass') || status.includes('ok') || status.includes('good')) {
                             showPassFailStatus('PASS');
+                            showStatusOutput('PASS');
                             return 'pass';
                         } else if (status.includes('fail') || status.includes('reject') || status.includes('bad')) {
                             showPassFailStatus('FAIL');
+                            showStatusOutput('FAIL');
                             return 'fail';
                         }
                     }
@@ -530,9 +549,11 @@
                         const result = output.result.toLowerCase();
                         if (result.includes('pass') || result.includes('accept')) {
                             showPassFailStatus('PASS');
+                            showStatusOutput('PASS');
                             return 'pass';
                         } else if (result.includes('fail') || result.includes('reject')) {
                             showPassFailStatus('FAIL');
+                            showStatusOutput('FAIL');
                             return 'fail';
                         }
                     }
@@ -544,9 +565,11 @@
                                 const className = pred.class.toLowerCase();
                                 if (className.includes('pass') || className.includes('good') || className.includes('ok')) {
                                     showPassFailStatus('PASS');
+                                    showStatusOutput('PASS');
                                     return 'pass';
                                 } else if (className.includes('fail') || className.includes('bad') || className.includes('defect')) {
                                     showPassFailStatus('FAIL');
+                                    showStatusOutput('FAIL');
                                     return 'fail';
                                 }
                             }
@@ -559,9 +582,11 @@
             const detectionCount = getDetectionCount(data);
             if (detectionCount > 0) {
                 showPassFailStatus('PASS');
+                showStatusOutput('PASS');
                 return 'pass';
             } else {
                 showPassFailStatus('FAIL');
+                showStatusOutput('FAIL');
                 return 'fail';
             }
         }
@@ -574,6 +599,13 @@
             statusDiv.innerHTML = `<span class="status-icon">${icon}</span> ${status}`;
             statusDiv.className = `status ${statusClass}`;
             statusDiv.classList.remove('hidden');
+        }
+
+        function showStatusOutput(status) {
+            const statusOutputDiv = document.getElementById('statusOutput');
+            statusOutputDiv.textContent = `Status: ${status}`;
+            statusOutputDiv.className = `status-output ${status.toLowerCase()}`;
+            statusOutputDiv.classList.remove('hidden');
         }
 
         function drawBoundingBox(prediction, overlay, scaleX, scaleY) {
