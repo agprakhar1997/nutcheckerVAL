@@ -523,60 +523,87 @@
         }
 
         function checkWorkflowStatus(data) {
-            console.log('Checking workflow status from data:', data);
+    console.log('Checking workflow status from data:', data);
+    
+    // Check for pass/fail in the workflow outputs
+    if (data.outputs) {
+        for (const [key, output] of Object.entries(data.outputs)) {
+            console.log(`Checking output ${key}:`, output);
             
-            // Check for explicit pass/fail in the workflow outputs
-            if (data.outputs) {
-                for (const [key, output] of Object.entries(data.outputs)) {
-                    console.log(`Checking output ${key}:`, output);
-                    
-                    // Look for status indicators in various formats
-                    if (output.status) {
-                        const status = output.status.toLowerCase();
-                        if (status.includes('pass') || status.includes('ok') || status.includes('good')) {
+            // Check for status_output field
+            if (output.status_output) {
+                const status = output.status_output.toLowerCase();
+                if (status.includes('pass') || status.includes('ok') || status.includes('good')) {
+                    showPassFailStatus('PASS');
+                    showStatusOutput('PASS');
+                    return 'pass';
+                } else if (status.includes('fail') || status.includes('reject') || status.includes('bad')) {
+                    showPassFailStatus('FAIL');
+                    showStatusOutput('FAIL');
+                    return 'fail';
+                }
+            }
+            
+            // Check for status field
+            if (output.status) {
+                const status = output.status.toLowerCase();
+                if (status.includes('pass') || status.includes('ok') || status.includes('good')) {
+                    showPassFailStatus('PASS');
+                    showStatusOutput('PASS');
+                    return 'pass';
+                } else if (status.includes('fail') || status.includes('reject') || status.includes('bad')) {
+                    showPassFailStatus('FAIL');
+                    showStatusOutput('FAIL');
+                    return 'fail';
+                }
+            }
+            
+            // Check for result field
+            if (output.result) {
+                const result = output.result.toLowerCase();
+                if (result.includes('pass') || result.includes('accept')) {
+                    showPassFailStatus('PASS');
+                    showStatusOutput('PASS');
+                    return 'pass';
+                } else if (result.includes('fail') || result.includes('reject')) {
+                    showPassFailStatus('FAIL');
+                    showStatusOutput('FAIL');
+                    return 'fail';
+                }
+            }
+            
+            // Check for classification outputs
+            if (output.predictions && Array.isArray(output.predictions)) {
+                for (const pred of output.predictions) {
+                    if (pred.class) {
+                        const className = pred.class.toLowerCase();
+                        if (className.includes('pass') || className.includes('good') || className.includes('ok')) {
                             showPassFailStatus('PASS');
                             showStatusOutput('PASS');
                             return 'pass';
-                        } else if (status.includes('fail') || status.includes('reject') || status.includes('bad')) {
+                        } else if (className.includes('fail') || className.includes('bad') || className.includes('defect')) {
                             showPassFailStatus('FAIL');
                             showStatusOutput('FAIL');
                             return 'fail';
-                        }
-                    }
-                    
-                    // Check for result field
-                    if (output.result) {
-                        const result = output.result.toLowerCase();
-                        if (result.includes('pass') || result.includes('accept')) {
-                            showPassFailStatus('PASS');
-                            showStatusOutput('PASS');
-                            return 'pass';
-                        } else if (result.includes('fail') || result.includes('reject')) {
-                            showPassFailStatus('FAIL');
-                            showStatusOutput('FAIL');
-                            return 'fail';
-                        }
-                    }
-                    
-                    // Check for classification outputs
-                    if (output.predictions && Array.isArray(output.predictions)) {
-                        for (const pred of output.predictions) {
-                            if (pred.class) {
-                                const className = pred.class.toLowerCase();
-                                if (className.includes('pass') || className.includes('good') || className.includes('ok')) {
-                                    showPassFailStatus('PASS');
-                                    showStatusOutput('PASS');
-                                    return 'pass';
-                                } else if (className.includes('fail') || className.includes('bad') || className.includes('defect')) {
-                                    showPassFailStatus('FAIL');
-                                    showStatusOutput('FAIL');
-                                    return 'fail';
-                                }
-                            }
                         }
                     }
                 }
             }
+        }
+    }
+    
+    // Default based on detection count
+    const detectionCount = getDetectionCount(data);
+    if (detectionCount > 0) {
+        showPassFailStatus('PASS');
+        showStatusOutput('PASS');
+        return 'pass';
+    } else {
+        showPassFailStatus('FAIL');
+        showStatusOutput('FAIL');
+        return 'fail';
+    }
+}
             
             // Default based on detection count
             const detectionCount = getDetectionCount(data);
