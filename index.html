@@ -283,13 +283,6 @@
         .hidden {
             display: none !important;
         }
-
-        .status-output {
-            text-align: center;
-            margin-top: 10px;
-            font-weight: bold;
-            font-size: 18px;
-        }
     </style>
 </head>
 <body>
@@ -321,7 +314,6 @@
                 <video id="videoElement" autoplay muted playsinline></video>
                 <div class="overlay" id="overlay"></div>
             </div>
-            <div id="statusOutput" class="status-output hidden"></div>
 
             <div id="status" class="status hidden"></div>
 
@@ -511,79 +503,59 @@
                     }
                 });
             }
-
-            // Stop detection if status is PASS or FAIL
-            if (workflowStatus === 'pass' || workflowStatus === 'fail') {
-                if (detectionInterval) {
-                    clearInterval(detectionInterval);
-                    detectionInterval = null;
-                }
-                document.getElementById('captureBtn').disabled = true;
-            }
         }
 
         function checkWorkflowStatus(data) {
     console.log('Checking workflow status from data:', data);
     
-    // Check for pass/fail in the workflow outputs
     if (data.outputs) {
         for (const [key, output] of Object.entries(data.outputs)) {
             console.log(`Checking output ${key}:`, output);
             
-            // Check for status_output field
+            // Explicit status_output check
             if (output.status_output) {
                 const status = output.status_output.toLowerCase();
                 if (status.includes('pass') || status.includes('ok') || status.includes('good')) {
                     showPassFailStatus('PASS');
-                    showStatusOutput('PASS');
                     return 'pass';
                 } else if (status.includes('fail') || status.includes('reject') || status.includes('bad')) {
                     showPassFailStatus('FAIL');
-                    showStatusOutput('FAIL');
                     return 'fail';
                 }
             }
-            
-            // Check for status field
+
+            // Existing logic (still useful as fallback)
             if (output.status) {
                 const status = output.status.toLowerCase();
                 if (status.includes('pass') || status.includes('ok') || status.includes('good')) {
                     showPassFailStatus('PASS');
-                    showStatusOutput('PASS');
                     return 'pass';
                 } else if (status.includes('fail') || status.includes('reject') || status.includes('bad')) {
                     showPassFailStatus('FAIL');
-                    showStatusOutput('FAIL');
                     return 'fail';
                 }
             }
-            
-            // Check for result field
+
             if (output.result) {
                 const result = output.result.toLowerCase();
                 if (result.includes('pass') || result.includes('accept')) {
                     showPassFailStatus('PASS');
-                    showStatusOutput('PASS');
                     return 'pass';
                 } else if (result.includes('fail') || result.includes('reject')) {
                     showPassFailStatus('FAIL');
-                    showStatusOutput('FAIL');
                     return 'fail';
                 }
             }
-            
-            // Check for classification outputs
+
             if (output.predictions && Array.isArray(output.predictions)) {
                 for (const pred of output.predictions) {
                     if (pred.class) {
                         const className = pred.class.toLowerCase();
                         if (className.includes('pass') || className.includes('good') || className.includes('ok')) {
                             showPassFailStatus('PASS');
-                            showStatusOutput('PASS');
                             return 'pass';
                         } else if (className.includes('fail') || className.includes('bad') || className.includes('defect')) {
                             showPassFailStatus('FAIL');
-                            showStatusOutput('FAIL');
                             return 'fail';
                         }
                     }
@@ -591,32 +563,17 @@
             }
         }
     }
-    
-    // Default based on detection count
+
     const detectionCount = getDetectionCount(data);
     if (detectionCount > 0) {
         showPassFailStatus('PASS');
-        showStatusOutput('PASS');
         return 'pass';
     } else {
         showPassFailStatus('FAIL');
-        showStatusOutput('FAIL');
         return 'fail';
     }
 }
-            
-            // Default based on detection count
-            const detectionCount = getDetectionCount(data);
-            if (detectionCount > 0) {
-                showPassFailStatus('PASS');
-                showStatusOutput('PASS');
-                return 'pass';
-            } else {
-                showPassFailStatus('FAIL');
-                showStatusOutput('FAIL');
-                return 'fail';
-            }
-        }
+
 
         function showPassFailStatus(status) {
             const statusDiv = document.getElementById('status');
@@ -626,13 +583,6 @@
             statusDiv.innerHTML = `<span class="status-icon">${icon}</span> ${status}`;
             statusDiv.className = `status ${statusClass}`;
             statusDiv.classList.remove('hidden');
-        }
-
-        function showStatusOutput(status) {
-            const statusOutputDiv = document.getElementById('statusOutput');
-            statusOutputDiv.textContent = `Status: ${status}`;
-            statusOutputDiv.className = `status-output ${status.toLowerCase()}`;
-            statusOutputDiv.classList.remove('hidden');
         }
 
         function drawBoundingBox(prediction, overlay, scaleX, scaleY) {
@@ -718,56 +668,20 @@
         }
 
         function displayResults(data) {
-            const resultsDiv = document.getElementById('results');
-            const resultsContent = document.getElementById('resultsContent');
-            
-            resultsContent.innerHTML = '';
-            
-            let hasResults = false;
-            
-            if (data.outputs) {
-                Object.entries(data.outputs).forEach(([key, output]) => {
-                    if (output.predictions && Array.isArray(output.predictions)) {
-                        hasResults = true;
-                        output.predictions.forEach((pred, index) => {
-                            const item = document.createElement('div');
-                            item.className = 'detection-item';
-                            
-                            // Create bounding box info
-                            const boundingBoxInfo = `
-                                <div class="bounding-box-info">
-                                    <strong>Bounding Box:</strong><br>
-                                    Center: (${pred.x?.toFixed(1) || 'N/A'}, ${pred.y?.toFixed(1) || 'N/A'})<br>
-                                    Size: ${pred.width?.toFixed(1) || 'N/A'} × ${pred.height?.toFixed(1) || 'N/A'}<br>
-                                    Area: ${pred.width && pred.height ? (pred.width * pred.height).toFixed(0) : 'N/A'} px²
-                                </div>
-                            `;
-                            
-                            item.innerHTML = `
-                                <strong>${pred.class || pred.label || 'Object'}</strong> - 
-                                Confidence: ${((pred.confidence || pred.score || 0) * 100).toFixed(1)}%
-                                ${boundingBoxInfo}
-                            `;
-                            resultsContent.appendChild(item);
-                        });
-                    }
-                    
-                    // Show workflow status if available
-                    if (output.status || output.result) {
-                        const statusItem = document.createElement('div');
-                        statusItem.className = 'detection-item';
-                        statusItem.innerHTML = `
-                            <strong>Workflow Status:</strong> ${output.status || output.result || 'Unknown'}
-                        `;
-                        resultsContent.appendChild(statusItem);
-                    }
-                });
-            } else if (data.predictions && Array.isArray(data.predictions)) {
-                hasResults = data.predictions.length > 0;
-                data.predictions.forEach((pred, index) => {
+    const resultsDiv = document.getElementById('results');
+    const resultsContent = document.getElementById('resultsContent');
+    
+    resultsContent.innerHTML = '';
+    let hasResults = false;
+
+    if (data.outputs) {
+        Object.entries(data.outputs).forEach(([key, output]) => {
+            if (output.predictions && Array.isArray(output.predictions)) {
+                hasResults = true;
+                output.predictions.forEach((pred, index) => {
                     const item = document.createElement('div');
                     item.className = 'detection-item';
-                    
+
                     const boundingBoxInfo = `
                         <div class="bounding-box-info">
                             <strong>Bounding Box:</strong><br>
@@ -776,7 +690,7 @@
                             Area: ${pred.width && pred.height ? (pred.width * pred.height).toFixed(0) : 'N/A'} px²
                         </div>
                     `;
-                    
+
                     item.innerHTML = `
                         <strong>${pred.class || pred.label || 'Object'}</strong> - 
                         Confidence: ${((pred.confidence || pred.score || 0) * 100).toFixed(1)}%
@@ -785,21 +699,65 @@
                     resultsContent.appendChild(item);
                 });
             }
-            
-            if (!hasResults) {
-                resultsContent.innerHTML = '<div class="detection-item">No objects detected in this image. Try adjusting the confidence threshold.</div>';
+
+            // Show status_output or result or status
+            if (output.status_output || output.status || output.result) {
+                const statusItem = document.createElement('div');
+                statusItem.className = 'detection-item';
+                statusItem.innerHTML = `
+                    <strong>Workflow Status:</strong> ${output.status_output || output.status || output.result || 'Unknown'}
+                `;
+                resultsContent.appendChild(statusItem);
             }
-            
-            // Debug info
-            const debugInfo = document.createElement('details');
-            debugInfo.innerHTML = `
-                <summary style="cursor: pointer; margin-top: 15px; font-weight: bold;">🔍 Debug Info (Raw API Response)</summary>
-                <pre style="background: #2d3748; color: #e2e8f0; padding: 15px; border-radius: 5px; margin-top: 10px; overflow-x: auto; font-size: 12px;">${JSON.stringify(data, null, 2)}</pre>
+
+            // Show confidence if present
+            if (output.confidence !== undefined) {
+                const confItem = document.createElement('div');
+                confItem.className = 'detection-item';
+                confItem.innerHTML = `
+                    <strong>Confidence:</strong> ${(output.confidence * 100).toFixed(1)}%
+                `;
+                resultsContent.appendChild(confItem);
+            }
+        });
+    } else if (data.predictions && Array.isArray(data.predictions)) {
+        hasResults = data.predictions.length > 0;
+        data.predictions.forEach((pred, index) => {
+            const item = document.createElement('div');
+            item.className = 'detection-item';
+
+            const boundingBoxInfo = `
+                <div class="bounding-box-info">
+                    <strong>Bounding Box:</strong><br>
+                    Center: (${pred.x?.toFixed(1) || 'N/A'}, ${pred.y?.toFixed(1) || 'N/A'})<br>
+                    Size: ${pred.width?.toFixed(1) || 'N/A'} × ${pred.height?.toFixed(1) || 'N/A'}<br>
+                    Area: ${pred.width && pred.height ? (pred.width * pred.height).toFixed(0) : 'N/A'} px²
+                </div>
             `;
-            resultsContent.appendChild(debugInfo);
-            
-            resultsDiv.classList.remove('hidden');
-        }
+
+            item.innerHTML = `
+                <strong>${pred.class || pred.label || 'Object'}</strong> - 
+                Confidence: ${((pred.confidence || pred.score || 0) * 100).toFixed(1)}%
+                ${boundingBoxInfo}
+            `;
+            resultsContent.appendChild(item);
+        });
+    }
+
+    if (!hasResults) {
+        resultsContent.innerHTML = '<div class="detection-item">No objects detected in this image. Try adjusting the confidence threshold.</div>';
+    }
+
+    // Debug info
+    const debugInfo = document.createElement('details');
+    debugInfo.innerHTML = `
+        <summary style="cursor: pointer; margin-top: 15px; font-weight: bold;">🔍 Debug Info (Raw API Response)</summary>
+        <pre style="background: #2d3748; color: #e2e8f0; padding: 15px; border-radius: 5px; margin-top: 10px; overflow-x: auto; font-size: 12px;">${JSON.stringify(data, null, 2)}</pre>
+    `;
+    resultsContent.appendChild(debugInfo);
+
+    resultsDiv.classList.remove('hidden');
+}
 
         function showStatus(message, type) {
             const statusDiv = document.getElementById('status');
