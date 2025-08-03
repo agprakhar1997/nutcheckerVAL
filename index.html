@@ -575,23 +575,15 @@
 }
 
 
-function showPassFailStatus(status) {
-    const statusDiv = document.getElementById('status');
-    const icon = status === 'PASS' ? '✅' : '❌';
-    const statusClass = status === 'PASS' ? 'pass' : 'fail';
-
-    // Update UI
-    statusDiv.innerHTML = `<span class="status-icon">${icon}</span> ${status}`;
-    statusDiv.className = `status ${statusClass}`;
-    statusDiv.classList.remove('hidden');
-
-    // Stop detection and freeze current image
-    stopCamera();
-
-    // Optional: Enable restart button (if added in UI)
-    const restartBtn = document.getElementById('restartBtn');
-    if (restartBtn) restartBtn.disabled = false;
-}
+        function showPassFailStatus(status) {
+            const statusDiv = document.getElementById('status');
+            const icon = status === 'PASS' ? '✅' : '❌';
+            const statusClass = status === 'PASS' ? 'pass' : 'fail';
+            
+            statusDiv.innerHTML = `<span class="status-icon">${icon}</span> ${status}`;
+            statusDiv.className = `status ${statusClass}`;
+            statusDiv.classList.remove('hidden');
+        }
 
 
         function drawBoundingBox(prediction, overlay, scaleX, scaleY) {
@@ -676,62 +668,22 @@ function showPassFailStatus(status) {
             document.getElementById('fps').textContent = stats.detectionsPerMinute;
         }
 
-        function displayResults(data) {
+function displayResults(data) {
     const resultsDiv = document.getElementById('results');
     const resultsContent = document.getElementById('resultsContent');
     
     resultsContent.innerHTML = '';
     let hasResults = false;
 
-    if (data.outputs) {
-        Object.entries(data.outputs).forEach(([key, output]) => {
-            if (output.predictions && Array.isArray(output.predictions)) {
-                hasResults = true;
-                output.predictions.forEach((pred, index) => {
-                    const item = document.createElement('div');
-                    item.className = 'detection-item';
+    // Check if predictions exist and are in the new nested format
+    const predictions = data.predictions?.predictions || [];
+    if (predictions.length > 0) {
+        hasResults = true;
+        let totalConfidence = 0;
 
-                    const boundingBoxInfo = `
-                        <div class="bounding-box-info">
-                            <strong>Bounding Box:</strong><br>
-                            Center: (${pred.x?.toFixed(1) || 'N/A'}, ${pred.y?.toFixed(1) || 'N/A'})<br>
-                            Size: ${pred.width?.toFixed(1) || 'N/A'} × ${pred.height?.toFixed(1) || 'N/A'}<br>
-                            Area: ${pred.width && pred.height ? (pred.width * pred.height).toFixed(0) : 'N/A'} px²
-                        </div>
-                    `;
+        predictions.forEach((pred, index) => {
+            totalConfidence += pred.confidence || 0;
 
-                    item.innerHTML = `
-                        <strong>${pred.class || pred.label || 'Object'}</strong> - 
-                        Confidence: ${((pred.confidence || pred.score || 0) * 100).toFixed(1)}%
-                        ${boundingBoxInfo}
-                    `;
-                    resultsContent.appendChild(item);
-                });
-            }
-
-            // Show status_output or result or status
-            if (output.status_output || output.status || output.result) {
-                const statusItem = document.createElement('div');
-                statusItem.className = 'detection-item';
-                statusItem.innerHTML = `
-                    <strong>Workflow Status:</strong> ${output.status_output || output.status || output.result || 'Unknown'}
-                `;
-                resultsContent.appendChild(statusItem);
-            }
-
-            // Show confidence if present
-            if (output.confidence !== undefined) {
-                const confItem = document.createElement('div');
-                confItem.className = 'detection-item';
-                confItem.innerHTML = `
-                    <strong>Confidence:</strong> ${(output.confidence * 100).toFixed(1)}%
-                `;
-                resultsContent.appendChild(confItem);
-            }
-        });
-    } else if (data.predictions && Array.isArray(data.predictions)) {
-        hasResults = data.predictions.length > 0;
-        data.predictions.forEach((pred, index) => {
             const item = document.createElement('div');
             item.className = 'detection-item';
 
@@ -746,11 +698,31 @@ function showPassFailStatus(status) {
 
             item.innerHTML = `
                 <strong>${pred.class || pred.label || 'Object'}</strong> - 
-                Confidence: ${((pred.confidence || pred.score || 0) * 100).toFixed(1)}%
+                Confidence: ${(pred.confidence * 100).toFixed(1)}%
                 ${boundingBoxInfo}
             `;
             resultsContent.appendChild(item);
         });
+
+        // Show average confidence
+        const avgConf = totalConfidence / predictions.length;
+        const confItem = document.createElement('div');
+        confItem.className = 'detection-item';
+        confItem.innerHTML = `
+            <strong>Average Confidence:</strong> ${(avgConf * 100).toFixed(1)}%
+        `;
+        resultsContent.appendChild(confItem);
+    }
+
+    // Show status_output (PASS/FAIL) if present
+    if (data.status_output) {
+        const statusItem = document.createElement('div');
+        statusItem.className = 'detection-item';
+        statusItem.innerHTML = `
+            <strong>Workflow Status:</strong> ${data.status_output}
+        `;
+        resultsContent.appendChild(statusItem);
+        hasResults = true;
     }
 
     if (!hasResults) {
@@ -767,6 +739,7 @@ function showPassFailStatus(status) {
 
     resultsDiv.classList.remove('hidden');
 }
+
 
         function showStatus(message, type) {
             const statusDiv = document.getElementById('status');
