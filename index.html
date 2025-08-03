@@ -521,6 +521,9 @@
                 } else if (status.includes('fail') || status.includes('reject') || status.includes('bad')) {
                     showPassFailStatus('FAIL');
                     return 'fail';
+                } else if (status.includes('unknown')) {
+                    showPassFailStatus('UNKNOWN', 'Please place the part correctly (Not Detected)');
+                    return 'unknown';
                 }
             }
 
@@ -577,10 +580,23 @@
 
         function showPassFailStatus(status) {
             const statusDiv = document.getElementById('status');
-            const icon = status === 'PASS' ? '✅' : '❌';
-            const statusClass = status === 'PASS' ? 'pass' : 'fail';
+                let icon, statusClass, text;
+
+    if (status === 'PASS') {
+          icon = '✅';
+          statusClass = 'pass';
+           text = 'PASS';
+     } else if (status === 'FAIL') {
+           icon = '❌';
+           statusClass = 'fail';
+           text = 'FAIL';
+      } else if (status === 'UNKNOWN') {
+            icon = '⚠️';
+            statusClass = 'unknown';
+            text = customMessage || 'Unknown';
+       }
             
-            statusDiv.innerHTML = `<span class="status-icon">${icon}</span> ${status}`;
+            statusDiv.innerHTML = `<span class="status-icon">${icon}</span> ${text}`;
             statusDiv.className = `status ${statusClass}`;
             statusDiv.classList.remove('hidden');
         }
