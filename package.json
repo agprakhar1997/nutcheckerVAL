@@ -1,0 +1,6 @@
+// package.json
+{
+  "dependencies": {
+    "cloudinary": "^1.37.2"
+  }
+}
